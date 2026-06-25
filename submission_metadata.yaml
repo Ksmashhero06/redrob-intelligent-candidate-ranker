@@ -1,0 +1,98 @@
+# Redrob Hackathon — Submission Metadata
+# Repo: https://github.com/Ksmashhero06/redrob-intelligent-candidate-ranker
+
+# ============================================================================
+# Team identity
+# ============================================================================
+team_name: "Ksmashhero06"
+
+primary_contact:
+  name: "Sathiyamoorthi K"
+  email: "kkssathiyamoorthi@gmail.com"
+  phone: "+91-XXXXXXXXXX"   # <-- fill in your phone number before submitting
+
+team_members:
+  - name: "Sathiyamoorthi K"
+    email: "kkssathiyamoorthi@gmail.com"
+    role: "Team Lead / ML Engineer"
+
+# ============================================================================
+# Code and reproducibility
+# ============================================================================
+github_repo: "https://github.com/Ksmashhero06/redrob-intelligent-candidate-ranker"
+
+sandbox_link: "https://huggingface.co/spaces/Ksmashhero06/redrob-candidate-ranker"
+# TODO: deploy sandbox_app.py to HuggingFace Spaces and update this URL
+
+reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./submission.csv"
+
+# ============================================================================
+# Compute environment
+# ============================================================================
+compute:
+  platform: "Windows 11 Local Machine"
+  cpu_cores: 8
+  ram_gb: 16
+  python_version: "3.13"
+  os: "Windows 11"
+  uses_gpu_for_inference: false
+  has_network_during_ranking: false
+  pre_computation_required: false
+  pre_computation_time_minutes: 0
+
+# ============================================================================
+# AI tools declaration
+# ============================================================================
+ai_tools_used:
+  - "Gemini (Google Antigravity IDE)"
+
+ai_usage_summary: |
+  Used Google Antigravity IDE (Gemini) as a pair-programming assistant for:
+  - Architecture discussion and scoring rubric design
+  - Code review and debugging
+  - Porting TypeScript scoring logic to Python
+  No candidate data was fed to any LLM during scoring.
+  The ranking itself is 100% rule-based, CPU-only, and deterministic.
+
+# ============================================================================
+# Approach summary
+# ============================================================================
+methodology_summary: |
+  Rule-based multi-factor ranker with five scoring components and a multiplicative
+  behavioral modifier. Components:
+
+  1. Title Fit: keyword match in job title and description across career history,
+     weighted by recency × duration. Includes shipping-evidence bonus (deployed,
+     production, A/B test mentions) and product-company detection. Non-technical
+     current titles (marketing, HR, accountant) receive a 0.1x penalty.
+
+  2. Skill Depth: duration × proficiency_multiplier × log(1+endorsements) for
+     JD-relevant skills (embeddings, vector DBs, retrieval tools, NDCG/MRR/MAP,
+     Python). Cross-checked against platform assessment scores; gaps trigger a
+     0.4x penalty.
+
+  3. Experience Band: Gaussian curve peaking at 7 years. Penalties for all-service-
+     company careers (0.25x), pure-academic careers (0.25x), and architect/lead
+     drift (0.5x). Education tier bonus for tier_1/tier_2 institutions.
+
+  4. Location Fit: Pune/Noida = 1.0, major metros = 0.8, other India = 0.5,
+     overseas = 0.2. Willing-to-relocate + short notice bumps score.
+
+  5. Behavioral Modifier (multiplier, [0.4, 1.15]): 12-signal composite including
+     recruiter_response_rate, activity decay, interview_completion_rate,
+     github_activity_score, avg_response_time_hours, offer_acceptance_rate,
+     saved_by_recruiters_30d, profile_completeness_score, verified_email/phone,
+     linkedin_connected.
+
+  Honeypots (structurally impossible profiles) are scored 0 and excluded.
+  Runtime: ~30 seconds on CPU for 100k candidates.
+
+# ============================================================================
+# Declarations
+# ============================================================================
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true
+  reproduction_tested: true

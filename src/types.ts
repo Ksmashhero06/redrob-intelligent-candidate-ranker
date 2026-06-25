@@ -1,3 +1,5 @@
+import { computeScore, detectHoneypot } from './utils/scoring';
+
 export interface Candidate {
   candidate_id: string;
   name: string;
@@ -21,10 +23,10 @@ export interface RankedCandidate extends Candidate {
   rank: number;
   score: number;
   reasoning: string;
+  isHoneypot: boolean;
+  honeypotReason: string;
 }
 
-// TODO: replace with real scoring logic
-export function computeScore(candidate: Candidate, weights: ScoringWeights): number {
-  return Math.random();
-}
+export { computeScore, detectHoneypot };
+
 

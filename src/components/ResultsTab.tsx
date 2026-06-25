@@ -40,10 +40,14 @@ export default function ResultsTab({
   const filteredAndSortedCandidates = useMemo(() => {
     let result = [...rankedCandidates];
 
-    // Text filter by candidate_id
+    // Text filter by candidate_id, name, or reasoning
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      result = result.filter(c => c.candidate_id.toLowerCase().includes(q));
+      result = result.filter(c =>
+        c.candidate_id.toLowerCase().includes(q) ||
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.reasoning || '').toLowerCase().includes(q)
+      );
     }
 
     // Sort
@@ -108,7 +112,7 @@ export default function ResultsTab({
           <input
             id="candidate-id-search"
             type="text"
-            placeholder="Filter by candidate_id..."
+            placeholder="Filter by ID, name, or reasoning..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-8 pr-3 py-1.5 text-xs border border-zinc-300 bg-white placeholder-zinc-400 focus:outline-hidden focus:border-zinc-800 focus:ring-0 rounded-none text-zinc-900"
@@ -205,13 +209,13 @@ export default function ResultsTab({
               <tbody className="divide-y divide-[#F3F4F6] text-xs text-[#1A1A1A]">
                 {filteredAndSortedCandidates.map((c, idx) => {
                   const isEven = idx % 2 === 1;
-                  const isFlagged = c.score < 0.1;
+                  const isFlagged = c.isHoneypot;
 
                   return (
                     <tr 
                       key={c.candidate_id} 
                       className={`hover:bg-zinc-50 transition-colors ${
-                        isEven ? 'bg-[#FCFCFD]' : 'bg-white'
+                        isFlagged ? 'bg-red-50/30' : isEven ? 'bg-[#FCFCFD]' : 'bg-white'
                       }`}
                     >
                       {/* Rank */}
@@ -231,28 +235,40 @@ export default function ResultsTab({
                           {/* Percent Bar */}
                           <div className="flex-1 bg-zinc-150 h-2 border border-zinc-200">
                             <div 
-                              className="bg-zinc-900 h-full transition-all duration-300" 
+                              className={`h-full transition-all duration-300 ${
+                                isFlagged ? 'bg-red-400' : 'bg-zinc-900'
+                              }`}
                               style={{ width: `${Math.min(100, c.score * 100)}%` }}
                             />
                           </div>
-                          <span className="font-mono text-[11px] font-bold text-zinc-800 w-10 text-right shrink-0">
+                          <span className={`font-mono text-[11px] font-bold w-10 text-right shrink-0 ${
+                            isFlagged ? 'text-red-600' : 'text-zinc-800'
+                          }`}>
                             {c.score.toFixed(3)}
                           </span>
                         </div>
                       </td>
                       {/* Reasoning */}
-                      <td className="py-2 px-4 border-r border-[#E5E5E5] text-zinc-500 text-[11px] truncate italic">
-                        {c.reasoning}
+                      <td className={`py-2 px-4 border-r border-[#E5E5E5] text-[11px] truncate ${
+                        isFlagged ? 'text-red-600 font-medium not-italic' : 'text-zinc-500 italic'
+                      }`}>
+                        {isFlagged ? c.honeypotReason.replace('HONEYPOT: ', '') : c.reasoning}
                       </td>
                       {/* Flagged Status */}
                       <td className="py-2 px-4">
                         {isFlagged ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-mono font-bold text-red-700 bg-red-50 border border-red-200">
+                          <span 
+                            title={c.honeypotReason}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-mono font-bold text-red-700 bg-red-50 border border-red-200 cursor-help"
+                          >
                             <AlertTriangle className="w-2.5 h-2.5 text-red-600" />
-                            FLAGGED
+                            HONEYPOT
                           </span>
                         ) : (
-                          <span className="text-[10px] text-zinc-400">&mdash;</span>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-mono font-medium text-emerald-700 bg-emerald-50 border border-emerald-200">
+                            <FileCheck className="w-2.5 h-2.5 text-emerald-600" />
+                            VALID
+                          </span>
                         )}
                       </td>
                     </tr>
@@ -288,7 +304,7 @@ export default function ResultsTab({
       <div className="p-3 bg-zinc-50 border border-[#E5E5E5] flex gap-2 text-[11px] text-[#717171] leading-relaxed">
         <Info className="w-4 h-4 text-zinc-500 shrink-0 mt-0.5" />
         <div>
-          <span className="font-semibold text-zinc-850 block mb-0.5">Scoring Model Active (Deterministic Random Mock)</span>
+          <span className="font-semibold text-zinc-850 block mb-0.5">Scoring Model Active (Multi-Factor Alignment Engine)</span>
           Candidates were assessed against Title Fit, Skill Depth, Experience Band, Location Fit, and Behavioral Signal coefficients. To customize individual weight equations, adjust the sliders on the left panel and click <strong className="text-zinc-800">Rank Candidates</strong> in the Upload view.
         </div>
       </div>

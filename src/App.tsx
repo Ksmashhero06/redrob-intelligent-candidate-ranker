@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Candidate, TabType, ScoringWeights, RankedCandidate, computeScore } from './types';
+import { generateReasoning } from './utils/scoring';
 import UploadTab from './components/UploadTab';
 import ResultsTab from './components/ResultsTab';
 import { 
@@ -41,15 +42,27 @@ export default function App() {
     if (candidates.length === 0) return;
 
     // Run computeScore(candidate, weights) for each candidate
-    const scored = candidates.map(c => ({
-      ...c,
-      score: computeScore(c, weights),
-      reasoning: 'Scoring logic not yet implemented',
-      rank: 0
-    }));
+    const scored = candidates.map(c => {
+      const { isHoneypot, reason: honeypotReason } = detectHoneypot(c.raw);
+      const score = computeScore(c, weights);
+      const reasoning = generateReasoning(c, score, weights);
+      return {
+        ...c,
+        score,
+        reasoning,
+        rank: 0,
+        isHoneypot,
+        honeypotReason,
+      };
+    });
 
-    // Sort descending by score
-    scored.sort((a, b) => b.score - a.score);
+    // Sort descending by score, tie-break by candidate_id ascending
+    scored.sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      return a.candidate_id.localeCompare(b.candidate_id);
+    });
 
     // Assign rank 1..N
     const ranked = scored.map((item, idx) => ({
