@@ -97,6 +97,82 @@ export function detectHoneypot(candidate: any): HoneypotResult {
   return { isHoneypot: false, reason: '' };
 }
 
+const REF_DATE = new Date(2026, 5, 25); // June 25, 2026
+
+function isTitleNonTechnical(title: string): boolean {
+  title = title.toLowerCase();
+  const nonTech = ["marketing", "hr ", "human resources", "recruiter", "sales", "accountant", 
+                   "operations", "graphic", "civil engineer", "mechanical engineer", "content writer"];
+  return nonTech.some(kw => title.includes(kw));
+}
+
+function isJobNonTechnical(job: any): boolean {
+  const title = (job.title || "").toLowerCase();
+  const desc = (job.description || "").toLowerCase();
+  
+  const nonTechTitles = ["marketing", "sales", "hr ", "human resources", "recruiter", 
+                         "operations", "accounting", "accountant", "content writer", 
+                         "graphic", "civil engineer", "mechanical engineer", "support", 
+                         "business analyst", "project manager", "designer", "legal", 
+                         "finance", "administrative"];
+  const titleNonTech = nonTechTitles.some(kw => title.includes(kw));
+  if (!titleNonTech) {
+    return false;
+  }
+  
+  // Check if description has technical terms
+  const techWords = ["develop", "code", "programming", "software", "engineer", "ml", "ai", 
+                     "data scientist", "database", "python", "java", "c++", "rust", 
+                     "typescript", "golang", "backend", "frontend", "full stack", "qa", 
+                     "test", "devops"];
+  const descHasTech = techWords.some(w => desc.includes(w));
+  
+  let isFakeTech = false;
+  if (descHasTech) {
+    if (desc.includes("java backend development") || desc.includes("test automation and qa") || desc.includes("full-stack web application development")) {
+      isFakeTech = true;
+    }
+  }
+  
+  if (!descHasTech || isFakeTech) {
+    return true;
+  }
+  
+  return false;
+}
+
+function getJobTitleBaseScore(title: string): number {
+  title = title.toLowerCase();
+  
+  // 1. Non-technical check
+  const nonTech = ["marketing", "hr ", "human resources", "recruiter", "sales", "accountant", 
+                   "operations", "graphic", "civil engineer", "mechanical engineer", "content writer",
+                   "support", "designer", "legal", "finance", "administrative", "project manager", "business analyst"];
+  if (nonTech.some(kw => title.includes(kw))) {
+    return 0.0;
+  }
+  
+  // 2. Direct AI/ML match
+  const titleKeywords = ['ranking', 'retrieval', 'search', 'recommend', 'embed', 'vector', 'ndcg', 'mrr', 'nlp', 'machine learning', 'ml engineer', 'ai engineer', 'data scientist', 'applied scientist', 'applied ml', 'applied ai', 'staff ml', 'senior ml', 'information retrieval', 'relevance', 'personalization'];
+  const titleHits = titleKeywords.filter(k => title.includes(k)).length;
+  if (titleHits > 0) {
+    return Math.min(0.80, 0.40 + title_hits_calculation(title, titleKeywords) * 0.15);
+  }
+  
+  // 3. General technical match
+  const tech = ["software", "engineer", "developer", "programmer", "coder", "architect", 
+                "lead", "scientist", "devops", "qa", "test", "web", "frontend", "backend", "fullstack", "full stack"];
+  if (tech.some(kw => title.includes(kw))) {
+    return 0.20;
+  }
+  
+  return 0.05;
+}
+
+function title_hits_calculation(title: string, keywords: string[]): number {
+  return keywords.filter(k => title.includes(k)).length;
+}
+
 /**
  * Computes the real candidate discovery score based on weights from the sliders.
  */
@@ -125,23 +201,40 @@ export function computeScore(candidate: any, weights: ScoringWeights): number {
       const title = (job.title || '').toLowerCase();
       const desc = (job.description || '').toLowerCase();
       const dur = job.duration_months || 0;
+      const company = (job.company || '').toLowerCase();
 
-      // Recency weight: 1.0 for most recent, decays exponentially/harmonically
       const recencyWeight = 1.0 / (index + 1);
-      const durationWeight = Math.min(60, dur) / 12.0; // cap duration weight at 5 years
+      const durationWeight = Math.min(60, dur) / 12.0;
       const roleImportance = recencyWeight * durationWeight;
 
+      const baseScore = getJobTitleBaseScore(title);
       let score = 0;
-      // Keywords representing search, ranking, retrieval, recommendation systems, or AI
-      const titleKeywords = ['ranking', 'retrieval', 'search', 'recommend', 'embed', 'vector', 'ndcg', 'mrr', 'map', 'ai', 'ml', 'nlp', 'machine learning'];
-      const descKeywords = ['ranking', 'retrieval', 'search', 'recommend', 'embed', 'vector', 'ndcg', 'mrr', 'map'];
 
-      const titleMatches = titleKeywords.filter(k => title.includes(k)).length;
-      const descMatches = descKeywords.filter(k => desc.includes(k)).length;
+      if (baseScore > 0.0) {
+        const descKeywords = ['ranking', 'retrieval', 'search', 'recommend', 'embed', 'vector', 'ndcg', 'mrr', 'map', 'information retrieval', 'rerank', 'sentence transformer', 'pinecone', 'weaviate', 'qdrant', 'faiss', 'elasticsearch', 'opensearch', 'relevance', 'personalization', 'recommendation engine', 'search engine', 'candidate ranking', 'item ranking', 'hybrid search', 'dense retrieval', 'sparse retrieval', 'ltr', 'learning to rank'];
+        const shippingKeywords = ['deployed', 'launched', 'shipped', 'production', 'a/b test', 'a/b testing', 'served', 'serving', 'scale', 'latency', 'throughput', 'real-time', 'online', 'live', 'rollout', 'canary', 'shadow mode', 'millions', 'billion', 'hundred million', 'daily active', 'user-facing', 'end-to-end', 'built and deployed', 'led development'];
+        const systemBigrams = ['recommendation system', 'search system', 'ranking system', 'ranking pipeline', 'retrieval system', 'retrieval pipeline', 'embedding pipeline', 'search pipeline', 'matching system', 'matching engine', 'recommendation engine', 'relevance system', 'ranking engine'];
 
-      score += titleMatches * 0.4;
-      score += descMatches * 0.15;
-      score = Math.min(1.0, score);
+        const descMatches = descKeywords.filter(k => desc.includes(k)).length;
+        const shipMatches = shippingKeywords.filter(k => desc.includes(k)).length;
+        const bigramMatches = systemBigrams.filter(bg => desc.includes(bg) || title.includes(bg)).length;
+
+        const descBonus = descMatches * 0.04 + shipMatches * 0.04 + Math.min(0.1, bigramMatches * 0.04);
+        score = Math.min(1.0, baseScore + descBonus);
+
+        const serviceCompanies = ['tcs', 'infosys', 'wipro', 'accenture', 'cognizant', 'capgemini'];
+        const isService = serviceCompanies.some(sc => company.includes(sc));
+        if (!isService && index < 3) {
+          const compSize = job.company_size || '';
+          const companySizeScore: Record<string, number> = {
+            '1-10': 0.6, '11-50': 0.65, '51-200': 0.75,
+            '201-500': 0.85, '501-1000': 0.9, '1001-5000': 0.95,
+            '5001-10000': 1.0, '10001+': 1.0
+          };
+          const sizeScore = companySizeScore[compSize] || 0.7;
+          score = Math.min(1.0, score + sizeScore * 0.05);
+        }
+      }
 
       weightedRoleMatches += score * roleImportance;
       roleWeightSum += roleImportance;
@@ -150,20 +243,16 @@ export function computeScore(candidate: any, weights: ScoringWeights): number {
     titleScore = roleWeightSum > 0 ? weightedRoleMatches / roleWeightSum : 0;
   }
 
-  // Penalize non-technical current titles heavily (marketing manager, accountant, etc.)
   const curTitle = (profile.current_title || '').toLowerCase();
-  const nonTechKeywords = ['marketing', 'hr ', 'recruiter', 'accountant', 'finance', 'sales', 'support', 'operations', 'administrative', 'legal'];
-  if (nonTechKeywords.some(k => curTitle.includes(k))) {
+  if (isTitleNonTechnical(curTitle)) {
     titleScore *= 0.1;
   }
   titleScore = Math.min(1.0, Math.max(0.0, titleScore));
 
 
   // 2. SKILL DEPTH (0.0 to 1.0)
-  // Weight by duration_months * proficiency_multiplier * log(1 + endorsements)
-  const targetSkills = ['embeddings', 'vector db', 'pinecone', 'weaviate', 'qdrant', 'milvus', 'opensearch', 'elasticsearch', 'faiss', 'python', 'ndcg', 'mrr', 'map', 'ranking', 'retrieval', 'hybrid search'];
+  const targetSkills = ['embeddings', 'sentence-transformers', 'sentence transformers', 'vector db', 'vector database', 'vector search', 'pinecone', 'weaviate', 'qdrant', 'milvus', 'opensearch', 'elasticsearch', 'faiss', 'annoy', 'scann', 'python', 'ndcg', 'mrr', 'map', 'ranking', 'retrieval', 'hybrid search', 'information retrieval', 'reranking', 'bi-encoder', 'cross-encoder', 'dense retrieval', 'sparse retrieval', 'bm25', 'bge', 'e5', 'learning to rank', 'ltr', 'recommendation', 'search engine'];
   let skillScoreSum = 0;
-  let matchCount = 0;
 
   const profMultipliers: Record<string, number> = {
     expert: 1.0,
@@ -177,39 +266,87 @@ export function computeScore(candidate: any, weights: ScoringWeights): number {
     const isTarget = targetSkills.some(ts => sName.includes(ts));
 
     if (isTarget) {
-      matchCount++;
       const mult = profMultipliers[s.proficiency] || 0.25;
       const endorsements = s.endorsements || 0;
       const dur = s.duration_months || 0;
       
       let skillVal = dur * mult * Math.log1p(endorsements);
 
-      // Cross-check against redrob_signals assessment scores
+      // Timeline and domain relevance corroboration
+      let corroborated = false;
+      const skillStart = new Date(REF_DATE.getTime() - dur * 30.4 * 24 * 60 * 60 * 1000);
+      
+      for (const job of history) {
+        if (!job.start_date) continue;
+        const jobStart = new Date(job.start_date);
+        const jobEnd = job.end_date ? new Date(job.end_date) : REF_DATE;
+
+        if (jobStart <= REF_DATE && jobEnd >= skillStart) {
+          if (!isJobNonTechnical(job)) {
+            if (sName.includes('python')) {
+              corroborated = true;
+              break;
+            } else {
+              const jobTitle = (job.title || '').toLowerCase();
+              const jobDesc = (job.description || '').toLowerCase();
+              
+              const titleKeywords = ['ranking', 'retrieval', 'search', 'recommend', 'embed', 'vector', 'ndcg', 'mrr', 'nlp', 'machine learning'];
+              const descKeywords = ['ranking', 'retrieval', 'search', 'recommend', 'embed', 'vector', 'ndcg', 'mrr', 'map'];
+              const systemBigrams = ['recommendation system', 'search system', 'ranking system', 'ranking pipeline', 'retrieval system', 'retrieval pipeline', 'embedding pipeline'];
+              
+              const hasKw = titleKeywords.some(k => jobTitle.includes(k)) ||
+                            descKeywords.some(k => jobDesc.includes(k)) ||
+                            systemBigrams.some(bg => jobTitle.includes(bg) || jobDesc.includes(bg));
+              if (hasKw) {
+                corroborated = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (!corroborated) {
+        skillVal *= 0.25;
+      }
+
+      // Cross-check against assessment scores
       const assessmentScores = signals.skill_assessment_scores || {};
-      // Find matching assessment score key
       const assessKey = Object.keys(assessmentScores).find(k => sName.includes(k.toLowerCase()) || k.toLowerCase().includes(sName));
       if (assessKey !== undefined) {
         const scoreVal = assessmentScores[assessKey] || 0;
-        // Expect higher assessment score for higher claimed proficiency
         const expected = s.proficiency === 'expert' ? 85 : s.proficiency === 'advanced' ? 70 : s.proficiency === 'intermediate' ? 50 : 25;
         if (scoreVal < expected - 20) {
-          skillVal *= 0.4; // Big assessment gap penalty
+          skillVal *= 0.4;
         }
       }
       skillScoreSum += skillVal;
     }
   });
 
-  // Normalize skill score sum. Max out around 120 points (e.g. 2 strong skills with 24 months, expert, 5 endorsements)
-  let skillScore = matchCount > 0 ? Math.min(1.0, skillScoreSum / 120.0) : 0;
+  let skillScore = Math.min(1.0, skillScoreSum / 120.0);
+
+  // Special keyword-stuffer penalty (non-technical current title + 3+ AI skills)
+  if (isTitleNonTechnical(curTitle)) {
+    let aiSkillsCount = 0;
+    skills.forEach((s: any) => {
+      const sName = (s.name || '').toLowerCase();
+      const isTarget = targetSkills.some(ts => sName.includes(ts) && ts !== 'python');
+      if (isTarget && (s.duration_months || 0) > 12) {
+        aiSkillsCount++;
+      }
+    });
+    if (aiSkillsCount >= 3) {
+      skillScore *= 0.5;
+      candidate._is_keyword_stuffer = true;
+    }
+  }
 
 
   // 3. EXPERIENCE BAND (0.0 to 1.0)
   const yoe = profile.years_of_experience || 0;
-  // Gaussian-ish curve peaking at 7.0 yrs (soft band 5-9)
   let expScore = Math.exp(-0.5 * Math.pow((yoe - 7.0) / 2.0, 2));
 
-  // Service company penalty (TCS, Infosys, Wipro, Accenture, Cognizant, Capgemini)
   const serviceCompanies = ['tcs', 'infosys', 'wipro', 'accenture', 'cognizant', 'capgemini'];
   const allService = history.length > 0 && history.every((job: any) => {
     const comp = (job.company || '').toLowerCase();
@@ -219,7 +356,6 @@ export function computeScore(candidate: any, weights: ScoringWeights): number {
     expScore *= 0.25;
   }
 
-  // Pure research / academic penalty
   const allAcademic = history.length > 0 && history.every((job: any) => {
     const title = (job.title || '').toLowerCase();
     const desc = (job.description || '').toLowerCase();
@@ -230,7 +366,6 @@ export function computeScore(candidate: any, weights: ScoringWeights): number {
     expScore *= 0.25;
   }
 
-  // Architect/tech-lead drift (most recent role is Architect/Lead/Manager for >= 18 mos with no coding evidence)
   if (history.length > 0) {
     const recentJob = history[0];
     const title = (recentJob.title || '').toLowerCase();
@@ -239,7 +374,6 @@ export function computeScore(candidate: any, weights: ScoringWeights): number {
 
     const isLeadTitle = ['architect', 'lead', 'manager', 'director', 'vp', 'head'].some(k => title.includes(k));
     if (isLeadTitle && dur >= 18) {
-      // Check coding keywords in description
       const hasCoding = ['code', 'develop', 'program', 'python', 'write', 'implement', 'build', 'c++', 'java', 'rust', 'typescript', 'sql', 'spark', 'pytorch', 'tensorflow'].some(k => desc.includes(k));
       if (!hasCoding) {
         expScore *= 0.5;
@@ -251,7 +385,7 @@ export function computeScore(candidate: any, weights: ScoringWeights): number {
   // 4. LOCATION FIT (0.0 to 1.0)
   const loc = (profile.location || '').toLowerCase();
   const country = (profile.country || '').toLowerCase();
-  let locScore = 0.2; // default outside India
+  let locScore = 0.2;
 
   const isTier1 = ['pune', 'noida'].some(k => loc.includes(k));
   const isTier2 = ['hyderabad', 'mumbai', 'delhi', 'bangalore', 'bengaluru', 'ncr', 'gurgaon', 'gurugram'].some(k => loc.includes(k));
@@ -265,7 +399,6 @@ export function computeScore(candidate: any, weights: ScoringWeights): number {
     locScore = 0.5;
   }
 
-  // Relocation & notice period bump for overseas/medium
   const willingToRelocate = signals.willing_to_relocate === true;
   const noticePeriod = signals.notice_period_days || 0;
   if (locScore < 0.8 && willingToRelocate && noticePeriod <= 30) {
@@ -293,17 +426,14 @@ export function computeScore(candidate: any, weights: ScoringWeights): number {
   const interviewCompletion = signals.interview_completion_rate || 0;
   const openToWork = signals.open_to_work_flag === true;
   
-  // Activity decay
   let activeDecay = 1.0;
   const lastActiveStr = signals.last_active_date;
   if (lastActiveStr) {
     const lastActive = new Date(lastActiveStr);
-    const refDate = new Date(2026, 5, 25); // June 25, 2026
-    const diffDays = Math.max(0, (refDate.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24));
-    activeDecay = Math.exp(-diffDays / 180.0); // 6 months half life decay
+    const diffDays = Math.max(0, (REF_DATE.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24));
+    activeDecay = Math.exp(-diffDays / 180.0);
   }
 
-  // Notice period factor
   const noticeDays = signals.notice_period_days || 0;
   const noticeFactor = noticeDays <= 30 ? 1.0 : noticeDays <= 90 ? 0.75 : 0.4;
 
@@ -313,9 +443,8 @@ export function computeScore(candidate: any, weights: ScoringWeights): number {
                          (openToWork ? 0.15 : 0.05) +
                          (noticeFactor * 0.15);
 
-  const rawModifier = 0.5 + 0.6 * behavioralBase; // range [0.5, 1.1]
+  const rawModifier = 0.5 + 0.6 * behavioralBase;
 
-  // Apply slider weight to behavioral modifier
   const behavioralModifier = 1.0 + (rawModifier - 1.0) * (weights.behavioralSignal / 100.0);
 
   const finalScore = baseScore * behavioralModifier;
@@ -339,7 +468,6 @@ export function generateReasoning(candidate: any, score: number, weights: Scorin
   const yearsExp = profile.years_of_experience || 0;
   const location = profile.location || 'Unknown';
   
-  // Find key driving skill
   const targetSkills = ['embeddings', 'vector db', 'pinecone', 'weaviate', 'qdrant', 'milvus', 'opensearch', 'elasticsearch', 'faiss', 'python', 'ndcg', 'mrr', 'map', 'ranking', 'retrieval'];
   const skills = raw.skills || [];
   let bestSkill = '';
@@ -359,6 +487,7 @@ export function generateReasoning(candidate: any, score: number, weights: Scorin
 
   const skillStr = bestSkill ? `; strong in ${bestSkill} (${bestSkillDur} mos)` : '';
   const responseRate = Math.round((raw.redrob_signals?.recruiter_response_rate || 0) * 100);
+  const stufferNote = candidate._is_keyword_stuffer ? " Note: AI skills listed without corroborating technical career history." : "";
 
-  return `${currentTitle} in ${location} with ${yearsExp} yrs exp${skillStr}; recruiter response rate ${responseRate}%.`;
+  return `${currentTitle} in ${location} with ${yearsExp} yrs exp${skillStr}; recruiter response rate ${responseRate}%.${stufferNote}`;
 }

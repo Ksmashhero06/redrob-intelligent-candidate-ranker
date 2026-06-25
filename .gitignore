@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+India_runs_data_and_ai_challenge/
+__pycache__/
+*.webp
+
+

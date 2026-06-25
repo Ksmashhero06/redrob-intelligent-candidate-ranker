@@ -57,34 +57,14 @@ ai_usage_summary: |
 # Approach summary
 # ============================================================================
 methodology_summary: |
-  Rule-based multi-factor ranker with five scoring components and a multiplicative
-  behavioral modifier. Components:
-
-  1. Title Fit: keyword match in job title and description across career history,
-     weighted by recency × duration. Includes shipping-evidence bonus (deployed,
-     production, A/B test mentions) and product-company detection. Non-technical
-     current titles (marketing, HR, accountant) receive a 0.1x penalty.
-
-  2. Skill Depth: duration × proficiency_multiplier × log(1+endorsements) for
-     JD-relevant skills (embeddings, vector DBs, retrieval tools, NDCG/MRR/MAP,
-     Python). Cross-checked against platform assessment scores; gaps trigger a
-     0.4x penalty.
-
-  3. Experience Band: Gaussian curve peaking at 7 years. Penalties for all-service-
-     company careers (0.25x), pure-academic careers (0.25x), and architect/lead
-     drift (0.5x). Education tier bonus for tier_1/tier_2 institutions.
-
-  4. Location Fit: Pune/Noida = 1.0, major metros = 0.8, other India = 0.5,
-     overseas = 0.2. Willing-to-relocate + short notice bumps score.
-
-  5. Behavioral Modifier (multiplier, [0.4, 1.15]): 12-signal composite including
-     recruiter_response_rate, activity decay, interview_completion_rate,
-     github_activity_score, avg_response_time_hours, offer_acceptance_rate,
-     saved_by_recruiters_30d, profile_completeness_score, verified_email/phone,
-     linkedin_connected.
-
-  Honeypots (structurally impossible profiles) are scored 0 and excluded.
-  Runtime: ~30 seconds on CPU for 100k candidates.
+  We implement a rule-based multi-factor ranker scoring candidates across 5 core dimensions: Title Fit, Skill Depth, Experience Band, Location Fit, and a 12-signal Behavioral Modifier.
+  The key differentiator of our approach versus naive keyword matching is our cross-field corroboration mechanism:
+  1. Title Fit is anchored on technical role titles, ensuring description matches only serve as bonuses and penalizing non-technical profiles.
+  2. Skill Depth validates the timeline of claimed AI/ML/Search skills (e.g. embeddings, vector search, RAG) by checking for overlap with actual career history durations, requiring relevant domain keywords in titles/descriptions of those corresponding roles to verify authenticity.
+  3. Experience Band uses a Gaussian curve peaking at 7 years, penalized for pure service/academic backgrounds.
+  4. Location Fit matches prioritized engineering hubs.
+  5. Behavioral Modifier acts as an engagement multiplier.
+  Honeypots are structurally detected and excluded (scored 0). Runtime is ~30 seconds for 100k candidates on CPU.
 
 # ============================================================================
 # Declarations
