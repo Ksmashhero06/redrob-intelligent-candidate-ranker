@@ -21,8 +21,7 @@ team_members:
 # ============================================================================
 github_repo: "https://github.com/Ksmashhero06/redrob-intelligent-candidate-ranker"
 
-sandbox_link: "https://huggingface.co/spaces/Ksmashhero06/redrob-candidate-ranker"
-# TODO: deploy sandbox_app.py to HuggingFace Spaces and update this URL
+sandbox_link: "https://huggingface.co/spaces/ksmashhero/redrob-candidate-ranker"
 
 reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./submission.csv"
 
